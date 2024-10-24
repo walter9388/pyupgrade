@@ -242,6 +242,69 @@ def f(x: int | str) -> None: ...
 
             id='optional, 3.12: ignore close brace in fstring',
         ),
+        pytest.param(
+            'from typing import Optional, Union\n'
+            'def f(x: Optional[Union[int, None]]): pass\n',
+
+            'from typing import Optional, Union\n'
+            'def f(x: int | None): pass\n',
+
+            id='nested union in optional',
+        ),
+        pytest.param(
+            'from typing import Optional, Union\n'
+            'def f(x: Union[Optional[int], None]]): pass\n',
+
+            'from typing import Optional, Union\n'
+            'def f(x: int | None): pass\n',
+
+            id='nested optional in union',
+        ),
+        # pytest.param(
+        #     'from typing import Optional, Union\n'
+        #     'def f(x: Optional[Union[int, None]]): pass\n'
+        #     'def g(x: Union[Union[int, None], None]): pass\n'
+        #     'def h(x: Union[int, int, None]): pass\n'
+        #     'def i(x: Union[Union[int, None], int]): pass\n'
+        #     'def j(x: Union[Union[int, None], int]): pass\n # comment',
+
+        #     'from typing import Optional, Union\n'
+        #     'def f(x: int | None): pass\n'
+        #     'def g(x: int | None): pass\n'
+        #     'def h(x: int | None): pass\n'
+        #     'def i(x: int | None): pass\n'
+        #     'def j(x: int | None): pass # comment\n',
+
+        #     id='cnested unions or optionals with duplicated types',
+        # ),
+        pytest.param(
+            'from typing import Union\n'
+            'def k(x: Union[a.b | a.c, a.b, list[str], str]): pass\n',
+
+            'from typing import Union\n'
+            'def k(x: a.b | a.c | list[str] | str): pass\n',
+
+            id='complex',
+        ),
+        pytest.param(
+            'from typing import Union\n'
+            'def kk(x: Union[list[int, str], list[Union[str, int], int]]): pass\n',
+
+            'from typing import Union\n'
+            'def kk(x: list[int, str]): pass\n',
+
+            id='nested types',
+            marks=pytest.mark.skip(reason='TODO: requires more complex typing consolidation'),
+        ),
+        pytest.param(
+            'from typing import Union\n'
+            'def k(x: Union[Union[Union[Union[a, b], a], c], a]): pass\n',
+
+            'from typing import Union\n'
+            'def k(x: a | b | c): pass\n',
+
+            id='deep nested unions with duplicated types',
+        ),
     ),
 )
 def test_fix_pep604_types(s, expected):

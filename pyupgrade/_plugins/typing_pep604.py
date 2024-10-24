@@ -21,6 +21,7 @@ from pyupgrade._token_helpers import is_open
 
 
 def _fix_optional(i: int, tokens: list[Token]) -> None:
+    print('OPTIONAL_RUNNING')
     j = find_op(tokens, i, '[')
     k = find_closing_bracket(tokens, j)
     if tokens[j].line == tokens[k].line:
@@ -43,6 +44,8 @@ def _fix_union(
     open_parens = []
     commas = []
     coding_depth = None
+    top_level_sep = []
+    print('UNION_RUNNING')
 
     j = find_op(tokens, i, '[')
     k = j + 1
@@ -72,9 +75,13 @@ def _fix_union(
             depth -= 1
         elif tokens[k].src == ',':
             commas.append((depth, k))
-
+            if depth == 1:
+                top_level_sep.append(k)
+        elif depth == 1 and tokens[k].src.lstrip() == '|':
+            top_level_sep.append(k)
         k += 1
     k -= 1
+    top_level_sep.append(k)
 
     assert coding_depth is not None
     assert not open_parens, open_parens
@@ -95,6 +102,8 @@ def _fix_union(
     else:
         comma_positions = []
 
+    to_delete += _duplicated_top_level_types(tokens, j + 1, top_level_sep)
+
     to_delete.sort()
 
     if tokens[j].line == tokens[k].line:
@@ -113,6 +122,34 @@ def _fix_union(
         for paren in reversed(to_delete):
             del tokens[paren]
         del tokens[i:j]
+
+
+def _duplicated_top_level_types(
+    tokens: list[Token],
+    start: int,
+    seps: list[int],
+) -> list[int]:
+    unique_types = []
+    to_delete = []
+
+    for i, kk in enumerate(seps):
+        # ignore the seperator after the first term
+        top_level_type_tokens = [
+            token.src
+            for token
+            in tokens[start + 1 if i > 0 else start:kk]
+        ]
+        top_level_type = ''.join(top_level_type_tokens).strip()
+
+        print(f'{top_level_type=}')
+        if top_level_type in unique_types:
+            to_delete += [*range(start, kk)]
+            print(f'DELETING: {top_level_type=}')
+        else:
+            unique_types.append(top_level_type)
+        start = kk
+
+    return to_delete
 
 
 def _supported_version(state: State) -> bool:
