@@ -244,21 +244,14 @@ def f(x: int | str) -> None: ...
         ),
         pytest.param(
             'from typing import Optional, Union\n'
-            'def f(x: Optional[Union[int, None]]): pass\n',
+            'def f(x: Optional[Union[int, None]]): pass\n'
+            'def g(x: Union[Optional[int], None]): pass\n',
 
             'from typing import Optional, Union\n'
-            'def f(x: int | None): pass\n',
+            'def f(x: int | None): pass\n'
+            'def g(x: int | None): pass\n',
 
-            id='nested union in optional',
-        ),
-        pytest.param(
-            'from typing import Optional, Union\n'
-            'def f(x: Union[Optional[int], None]]): pass\n',
-
-            'from typing import Optional, Union\n'
-            'def f(x: int | None): pass\n',
-
-            id='nested optional in union',
+            id='nested unions and optionals',
         ),
         # pytest.param(
         #     'from typing import Optional, Union\n'
@@ -288,13 +281,17 @@ def f(x: int | str) -> None: ...
         ),
         pytest.param(
             'from typing import Union\n'
-            'def kk(x: Union[list[int, str], list[Union[str, int], int]]): pass\n',
+            'def kk(x: Union[list[int, str], list[Union[str, int]]]):\n'
+            '    pass\n',
 
             'from typing import Union\n'
-            'def kk(x: list[int, str]): pass\n',
+            'def kk(x: list[int, str]):\n'
+            '    pass\n',
 
             id='nested types',
-            marks=pytest.mark.skip(reason='TODO: requires more complex typing consolidation'),
+            marks=pytest.mark.skip(
+                reason='TODO: requires more complex typing consolidation',
+            ),
         ),
         pytest.param(
             'from typing import Union\n'

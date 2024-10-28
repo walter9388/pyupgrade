@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from tokenize_rt import NON_CODING_TOKENS
 from tokenize_rt import Offset
 from tokenize_rt import Token
+from tokenize_rt import tokens_to_src
 
 from pyupgrade._ast_helpers import ast_to_offset
 from pyupgrade._ast_helpers import is_name_attr
@@ -21,16 +22,23 @@ from pyupgrade._token_helpers import is_open
 
 
 def _fix_optional(i: int, tokens: list[Token]) -> None:
-    print('OPTIONAL_RUNNING')
     j = find_op(tokens, i, '[')
     k = find_closing_bracket(tokens, j)
+    none_present = _is_none_present(tokens, j + 1, k)
+
     if tokens[j].line == tokens[k].line:
-        tokens[k] = Token('CODE', ' | None')
-        del tokens[i:j + 1]
+        if none_present:
+            del tokens[k]
+        else:
+            tokens[k:k + 1] = [Token('CODE', ' | '), Token('CODE', 'None')]
+        del tokens[i: j + 1]
     else:
         tokens[j] = tokens[j]._replace(src='(')
         tokens[k] = tokens[k]._replace(src=')')
-        tokens[i:j] = [Token('CODE', 'None | ')]
+        if none_present:
+            del tokens[i:j]
+        else:
+            tokens[i:j] = [Token('CODE', 'None'), Token('CODE', ' | ')]
 
 
 def _fix_union(
@@ -45,7 +53,6 @@ def _fix_union(
     commas = []
     coding_depth = None
     top_level_sep = []
-    print('UNION_RUNNING')
 
     j = find_op(tokens, i, '[')
     k = j + 1
@@ -77,7 +84,7 @@ def _fix_union(
             commas.append((depth, k))
             if depth == 1:
                 top_level_sep.append(k)
-        elif depth == 1 and tokens[k].src.lstrip() == '|':
+        elif depth == 1 and tokens[k].src.strip() == '|':
             top_level_sep.append(k)
         k += 1
     k -= 1
@@ -112,7 +119,7 @@ def _fix_union(
             tokens[comma] = Token('CODE', ' |')
         for paren in reversed(to_delete):
             del tokens[paren]
-        del tokens[i:j + 1]
+        del tokens[i: j + 1]
     else:
         tokens[j] = tokens[j]._replace(src='(')
         tokens[k] = tokens[k]._replace(src=')')
@@ -124,30 +131,51 @@ def _fix_union(
         del tokens[i:j]
 
 
+def _is_none_present(tokens: list[Token], start: int, end: int) -> bool:
+    depth = 1
+    i = 0
+    k = start
+    while k < end:
+        print(i, k, start, end, depth, tokens[k])
+        if is_open(tokens[k]):
+            depth += 1
+        elif is_close(tokens[k]):
+            depth -= 1
+        elif tokens[k].src.strip() in [',', '|'] and depth == 1:
+            # ignore the seperator after the first term
+            start_ = start + 1 if i > 0 else start
+            if tokens_to_src(tokens[start_: k]).strip() == 'None':
+                return True
+            start = k
+            i += 1
+        elif k == end - 1:
+            # ignore the seperator after the first term
+            start_ = start + 1 if i > 0 else start
+            if tokens_to_src(tokens[start_: end]).strip() == 'None':
+                return True
+        k += 1
+    return False
+
+
 def _duplicated_top_level_types(
     tokens: list[Token],
     start: int,
     seps: list[int],
 ) -> list[int]:
-    unique_types = []
-    to_delete = []
+    unique_types: list[str] = []
+    to_delete: list[int] = []
 
-    for i, kk in enumerate(seps):
+    for i, sep in enumerate(seps):
         # ignore the seperator after the first term
-        top_level_type_tokens = [
-            token.src
-            for token
-            in tokens[start + 1 if i > 0 else start:kk]
-        ]
+        start_ = start + 1 if i > 0 else start
+        top_level_type_tokens = [token.src for token in tokens[start_: sep]]
         top_level_type = ''.join(top_level_type_tokens).strip()
 
-        print(f'{top_level_type=}')
         if top_level_type in unique_types:
-            to_delete += [*range(start, kk)]
-            print(f'DELETING: {top_level_type=}')
+            to_delete += [*range(start, sep)]
         else:
             unique_types.append(top_level_type)
-        start = kk
+        start = sep
 
     return to_delete
 
